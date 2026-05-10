@@ -73,7 +73,16 @@ class SVDRecommender:
         if k <= 0:
             raise ValueError("k must be positive")
 
-        raise NotImplementedError("Реализуйте восстановление матрицы")
+        
+     # Берём первые k компонент
+        U_k = self.U[:, :k]
+        S_k = self.S[:k]
+        V_k = self.V[:k, :]
+        
+        # Восстанавливаем матрицу X_hat = U_k @ diag(S_k) @ V_k
+        X_hat = U_k @ np.diag(S_k) @ V_k
+        
+        return X_hat
 
     def predict_rating(self, user_id: int, item_id: int, k: int = 20) -> float:
         """
@@ -86,7 +95,14 @@ class SVDRecommender:
         3) Предсказание для пары (user_id, item_id) берём из X_hat.
         4) Обрезаем результат в диапазон [0.0, 5.0].
         """
-        raise NotImplementedError("Реализуйте предсказание рейтинга")
+         # Восстанавливаем приближённую матрицу
+        X_hat = self._reconstruct_matrix(k)
+        
+        # Берём предсказание для конкретного пользователя и фильма
+        rating = X_hat[user_id, item_id]
+        
+        # Обрезаем в диапазон [0, 5]
+        return np.clip(rating, 0.0, 5.0)
 
     def predict_items_for_user(
         self, user_id: int, k: int = 20, n_recommendations: int = 5
@@ -101,8 +117,28 @@ class SVDRecommender:
         4) Сортируем кандидатов по убыванию прогнозного рейтинга.
         5) Возвращаем top-n индексы фильмов.
         """
-        raise NotImplementedError("Реализуйте рекомендацию фильмов")
-
+         # Восстанавливаем приближённую матрицу
+        X_hat = self._reconstruct_matrix(k)
+        
+        # Берём прогнозы для пользователя
+        user_predictions = X_hat[user_id]
+        
+        # Находим фильмы, которые пользователь уже оценил
+        user_rated = self.ui_matrix[user_id] > 0
+        
+        # Исключаем оценённые фильмы
+        candidate_scores = []
+        for item_id in range(len(user_predictions)):
+            if not user_rated[item_id]:
+                candidate_scores.append((item_id, user_predictions[item_id]))
+        
+        # Сортируем по убыванию прогнозного рейтинга
+        candidate_scores.sort(key=lambda x: x[1], reverse=True)
+        
+        # Берём top-n рекомендаций
+        recommendations = [int(item_id) for item_id, _ in candidate_scores[:n_recommendations]]
+        
+        return recommendations
 
 if __name__ == "__main__":
     recommender = SVDRecommender()
