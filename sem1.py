@@ -62,7 +62,34 @@ def top_n_recommend(
     Returns:
         Список кортежей (movieId, avg_rating, rating_count, title).
     """
-    raise(NotImplementedError("Реализуйте функцию top_n_recommend"))
+    ratings_df, movies_df = load_data()
+    
+    # Группировка по movieId
+    movie_stats = ratings_df.groupby('movieId').agg(
+        avg_rating=('rating', 'mean'),
+        rating_count=('rating', 'count')
+    ).reset_index()
+    
+    # Фильтрация по минимальному количеству оценок
+    filtered = movie_stats[movie_stats['rating_count'] >= min_ratings].copy()
+    
+    # Сортировка по среднему рейтингу и количеству оценок
+    filtered = filtered.sort_values(
+        ['avg_rating', 'rating_count'], 
+        ascending=[False, False]
+    )
+    
+    # Берём top-n
+    top_movies = filtered.head(n_recommendations)
+    
+    # Добавляем названия фильмов
+    result = []
+    for _, row in top_movies.iterrows():
+        movie_id = row['movieId']
+        title = movies_df[movies_df['movieId'] == movie_id]['title'].values[0]
+        result.append((movie_id, row['avg_rating'], row['rating_count'], title))
+    
+    return result
 
 
 def evaluate_rec_systems(
@@ -86,7 +113,27 @@ def evaluate_rec_systems(
     Returns:
         Словарь {'random_accuracy', 'popular_accuracy'}.
     """
-    raise(NotImplementedError("Реализуйте функцию evaluate_rec_systems"))
+     # Получаем рекомендации
+    random_recs = random_recommend(n_recommendations, seed=random_state)
+    popular_recs = top_n_recommend(n_recommendations)
+    popular_recs_ids = [rec[0] for rec in popular_recs]  # берём только ID фильмов
+    
+    # Загружаем данные о рейтингах пользователя
+    ratings_df, _ = load_data()
+    user_ratings = ratings_df[ratings_df['userId'] == user_id]
+    user_watched_movies = user_ratings['movieId'].tolist()
+    
+    # Считаем Accuracy
+    random_hits = sum(1 for movie in random_recs if movie in user_watched_movies)
+    popular_hits = sum(1 for movie in popular_recs_ids if movie in user_watched_movies)
+    
+    random_accuracy = random_hits / n_recommendations
+    popular_accuracy = popular_hits / n_recommendations
+    
+    return {
+        'random_accuracy': random_accuracy,
+        'popular_accuracy': popular_accuracy
+    }
 
 
 if __name__ == "__main__":
